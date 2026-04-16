@@ -1,0 +1,54 @@
+name: Build iPhone App
+
+on:
+  push:
+    branches: [ main, master ]
+  workflow_dispatch:
+
+jobs:
+  build:
+    runs-on: macos-latest
+    
+    steps:
+    - uses: actions/checkout@v3
+    
+    - name: Setup Node.js
+      uses: actions/setup-node@v3
+      with:
+        node-version: '18'
+    
+    - name: Install dependencies
+      run: npm install
+    
+    - name: Build React app
+      run: npm run build
+    
+    - name: Install Capacitor iOS
+      run: |
+        if [ ! -d "ios" ]; then
+          npx cap add ios
+        fi
+        npx cap sync ios
+    
+    - name: Build iOS Archive
+      run: |
+        cd ios/App
+        xcodebuild -workspace App.xcworkspace -scheme App -sdk iphoneos -configuration Release archive -archivePath $PWD/build/App.xcarchive CODE_SIGNING_ALLOWED=NO
+    
+    - name: Export IPA
+      run: |
+        cd ios/App
+        xcodebuild -exportArchive -archivePath $PWD/build/App.xcarchive -exportPath $PWD/build -exportOptionsPlist exportOptions.plist || echo "Export may need signing, continuing..."
+    
+    - name: Create unsigned IPA
+      run: |
+        cd ios/App/build
+        mkdir -p Payload
+        cp -r App.xcarchive/Products/Applications/App.app Payload/
+        zip -r CronusLeaker.ipa Payload
+    
+    - name: Upload IPA
+      uses: actions/upload-artifact@v3
+      with:
+        name: CronusLeaker-iPhone
+        path: ios/App/build/CronusLeaker.ipa
